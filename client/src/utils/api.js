@@ -1,8 +1,10 @@
 import axios from 'axios';
 
 // Define unified Axios instance pointing to the Express server
+// In production (Vercel), VITE_API_URL is not set so it falls back to '/api'
+// In development, set VITE_API_URL=http://localhost:5000/api in client/.env
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
   },

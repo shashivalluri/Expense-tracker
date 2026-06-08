@@ -10,6 +10,7 @@ backend/node_modules/
 .env.test.local
 .env.production.local
 backend/.env
+client/.env
 
 # Build output
 client/dist/
