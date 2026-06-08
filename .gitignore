@@ -33,3 +33,5 @@ Thumbs.db
 # Misc
 *.pem
 .vercel
+
+.vercel

@@ -2,23 +2,37 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-const dbPath = path.join(__dirname, '..', 'data', 'mockDB.json');
+let dbPath = (process.env.VERCEL || process.env.NOW_BUILDER || __dirname.includes('/var/task') || __dirname.includes('\\var\\task'))
+  ? path.join('/tmp', 'mockDB.json')
+  : path.join(__dirname, '..', 'data', 'mockDB.json');
 
 // Ensure directory exists
 const ensureDbExists = () => {
-  const dir = path.dirname(dbPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  if (!fs.existsSync(dbPath)) {
-    const initialData = {
-      users: [],
-      transactions: [],
-      budgets: [],
-      goals: [],
-      activitylogs: []
-    };
-    fs.writeFileSync(dbPath, JSON.stringify(initialData, null, 2), 'utf8');
+  try {
+    const dir = path.dirname(dbPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    if (!fs.existsSync(dbPath)) {
+      const initialData = {
+        users: [],
+        transactions: [],
+        budgets: [],
+        goals: [],
+        activitylogs: []
+      };
+      fs.writeFileSync(dbPath, JSON.stringify(initialData, null, 2), 'utf8');
+    }
+  } catch (err) {
+    console.warn(`[mockStorage] Failed to initialize mock database at ${dbPath}: ${err.message}`);
+    // Fall back to /tmp if write or mkdir failed (e.g. read-only filesystem on Vercel)
+    if (dbPath !== path.join('/tmp', 'mockDB.json')) {
+      console.warn(`[mockStorage] Falling back to /tmp/mockDB.json`);
+      dbPath = path.join('/tmp', 'mockDB.json');
+      ensureDbExists(); // Recursively retry with fallback path
+    } else {
+      console.error(`[mockStorage] Fatal: /tmp/mockDB.json is also not writable!`);
+    }
   }
 };
 
