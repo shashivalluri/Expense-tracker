@@ -1,0 +1,16 @@
+{
+  "name": "glassmorphic-expense-tracker-workspace",
+  "version": "1.0.0",
+  "description": "Full-stack Glassmorphic Bento Grid Expense Tracker workspace",
+  "main": "server.js",
+  "scripts": {
+    "install-all": "npm install && cd backend && npm install && cd ../client && npm install",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:client\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "seed": "cd backend && npm run seed"
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

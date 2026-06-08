@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased transition-colors duration-300;
+  }
+}
+
+@layer components {
+  /* Dynamic Glassmorphism Panels */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark .glass-card {
+    background: rgba(10, 11, 30, 0.55);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4);
+  }
+
+  /* Glass hover cards with border glows */
+  .glass-card-hover {
+    @apply glass-card;
+  }
+  
+  .glass-card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px 0 rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.4);
+  }
+
+  .dark .glass-card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px 0 rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.3);
+  }
+
+  /* Modern Glass Buttons */
+  .glass-btn-primary {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    @apply text-white font-semibold py-2 px-4 rounded-xl shadow-neon transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] hover:shadow-neon-teal hover:brightness-110 flex items-center justify-center gap-2;
+  }
+
+  .glass-btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    @apply text-slate-800 dark:text-slate-100 font-semibold py-2 px-4 rounded-xl backdrop-blur-glass transition-all duration-300 hover:bg-white/20 active:scale-[0.98] flex items-center justify-center gap-2;
+  }
+
+  .dark .glass-btn-secondary {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    @apply hover:bg-white/10;
+  }
+
+  /* Input fields with glass effect */
+  .glass-input {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    @apply w-full px-4 py-3 rounded-xl outline-none transition-all duration-300 focus:ring-2 focus:ring-brand-indigo/50 focus:border-brand-indigo/70 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 font-medium;
+  }
+
+  .dark .glass-input {
+    background: rgba(15, 17, 40, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    @apply focus:ring-brand-violet/50 focus:border-brand-violet/70;
+  }
+
+  /* Ambient glowing backdrop blobs */
+  .ambient-glow-indigo {
+    background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, rgba(99,102,241,0) 70%);
+    filter: blur(40px);
+  }
+
+  .ambient-glow-teal {
+    background: radial-gradient(circle, rgba(20,184,166,0.15) 0%, rgba(20,184,166,0) 70%);
+    filter: blur(45px);
+  }
+
+  .ambient-glow-pink {
+    background: radial-gradient(circle, rgba(236,72,153,0.12) 0%, rgba(236,72,153,0) 70%);
+    filter: blur(50px);
+  }
+  
+  /* Scrollbars inside cards */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.15);
+    border-radius: 99px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.3);
+  }
+}
+
+/* Print View custom styles for generating print-friendly PDFs */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-card {
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    break-inside: avoid;
+  }
+}
