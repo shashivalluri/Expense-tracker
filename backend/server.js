@@ -9,20 +9,28 @@ const seedData = require('./utils/seedData');
 // Load environment variables
 dotenv.config();
 
+// Connect to MongoDB Atlas
+connectDB().catch((err) => {
+  console.error('[Server] Failed to connect to MongoDB:', err.message);
+  process.exit(1);
+});
+
 // Initialize express app
 const app = express();
 
 // Middleware
 app.use(express.json());
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || '*',
+    credentials: true,
+  })
+);
 
 // HTTP Request logging
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
-
-// Connect to Database (MongoDB Atlas or Local MongoDB)
-connectDB();
 
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -34,12 +42,12 @@ app.use('/api/activities', require('./routes/activities'));
 // Express on-demand seed trigger for the frontend Settings panel
 app.post('/api/seed', async (req, res, next) => {
   try {
-    const { userId } = req.body; // Can accept optional userId to seed targeted accounts
+    const { userId } = req.body;
     const result = await seedData(userId);
     res.status(200).json({
       success: true,
       message: 'Demo database seeded successfully!',
-      details: result
+      details: result,
     });
   } catch (err) {
     next(err);
@@ -50,8 +58,9 @@ app.post('/api/seed', async (req, res, next) => {
 app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Frosted Bento Glass Expense Tracker API is active!',
-    mode: require('mongoose').connection.readyState === 1 ? 'MongoDB Connection Active' : 'Offline JSON Mock Database'
+    message: 'Budget Tracker Pro API is active!',
+    mode: 'MongoDB Atlas via Mongoose',
+    databaseConfigured: Boolean(process.env.MONGODB_URI),
   });
 });
 
@@ -59,16 +68,19 @@ app.get('/', (req, res) => {
 app.use(errorHandler);
 
 // Unhandled Promise Rejections & Server Start
-const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => {
-  console.log(`\n======================================================`);
-  console.log(`[Server] running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-  console.log(`[API URL] http://localhost:${PORT}`);
-  console.log(`======================================================\n`);
-});
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`\n======================================================`);
+    console.log(`[Server] running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+    console.log(`[API URL] http://localhost:${PORT}`);
+    console.log(`======================================================\n`);
+  });
+}
 
 // Catch unhandled promise rejections
-process.on('unhandledRejection', (err, promise) => {
+process.on('unhandledRejection', (err) => {
   console.error(`[Unhandled Rejection ERROR]: ${err.message}`);
-  // Keep server running in dev
 });
+
+module.exports = app;

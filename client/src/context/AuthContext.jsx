@@ -3,103 +3,134 @@ import api from '../utils/api';
 
 const AuthContext = createContext();
 
+const clearStoredAuth = () => {
+  ['bt_token', 'bt_access_token', 'bt_refresh_token', 'bt_user', 'aura_token', 'aura_user'].forEach((key) => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  });
+};
+
+const getStoredAccessToken = () => {
+  return localStorage.getItem('bt_access_token') ||
+    sessionStorage.getItem('bt_access_token') ||
+    localStorage.getItem('bt_token') ||
+    sessionStorage.getItem('bt_token');
+};
+
+const getStoredRefreshToken = () => {
+  return localStorage.getItem('bt_refresh_token') || sessionStorage.getItem('bt_refresh_token');
+};
+
+const getStorageForSession = () => {
+  return localStorage.getItem('bt_refresh_token') || localStorage.getItem('bt_access_token') || localStorage.getItem('bt_token')
+    ? localStorage
+    : sessionStorage;
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('bt_token') || sessionStorage.getItem('bt_token'));
+  const [token, setToken] = useState(getStoredAccessToken());
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
-  // Initialize and verify user on boot
-  useEffect(() => {
-    const bootstrapUser = async () => {
-      const storedToken = localStorage.getItem('bt_token') || sessionStorage.getItem('bt_token');
-      if (storedToken) {
-        try {
-          const res = await api.get('/auth/me');
-          if (res.data.success) {
-            setUser(res.data.user);
-          } else {
-            handleLogout();
-          }
-        } catch (err) {
-          console.error('[Bootstrap] Token validation failed:', err.message);
-          handleLogout();
-        }
-      }
-      setLoading(false);
-    };
-    bootstrapUser();
-  }, []);
+  const persistSession = ({ accessToken, token: legacyToken, refreshToken, user: profile }, rememberMe = false) => {
+    const storage = rememberMe ? localStorage : sessionStorage;
+    const finalAccessToken = accessToken || legacyToken;
 
-  const handleLogout = () => {
-    localStorage.removeItem('bt_token');
-    localStorage.removeItem('bt_user');
-    sessionStorage.removeItem('bt_token');
-    sessionStorage.removeItem('bt_user');
-    // Also clean legacy keys if present
-    localStorage.removeItem('aura_token');
-    localStorage.removeItem('aura_user');
-    sessionStorage.removeItem('aura_token');
-    sessionStorage.removeItem('aura_user');
+    storage.setItem('bt_access_token', finalAccessToken);
+    storage.setItem('bt_refresh_token', refreshToken);
+    storage.setItem('bt_user', JSON.stringify(profile));
+    storage.removeItem('bt_token');
+
+    setToken(finalAccessToken);
+    setUser(profile);
+  };
+
+  const handleLogout = async (notifyServer = false) => {
+    if (notifyServer && getStoredAccessToken()) {
+      try {
+        await api.post('/auth/logout');
+      } catch (err) {
+        console.warn('[Auth] Logout request failed:', err.response?.data?.error || err.message);
+      }
+    }
+
+    clearStoredAuth();
     setUser(null);
     setToken(null);
   };
 
-  // Register User
+  useEffect(() => {
+    const bootstrapUser = async () => {
+      const storedToken = getStoredAccessToken();
+      const refreshToken = getStoredRefreshToken();
+
+      if (!storedToken && !refreshToken) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await api.get('/auth/me');
+        if (res.data.success) {
+          setUser(res.data.user);
+          setToken(storedToken);
+        }
+      } catch (err) {
+        if (refreshToken) {
+          try {
+            const refreshRes = await api.post('/auth/refresh', { refreshToken });
+            const storage = getStorageForSession();
+            storage.setItem('bt_access_token', refreshRes.data.accessToken || refreshRes.data.token);
+            storage.setItem('bt_refresh_token', refreshRes.data.refreshToken);
+            storage.setItem('bt_user', JSON.stringify(refreshRes.data.user));
+            setToken(refreshRes.data.accessToken || refreshRes.data.token);
+            setUser(refreshRes.data.user);
+          } catch (refreshErr) {
+            console.warn('[Bootstrap] Session refresh failed:', refreshErr.response?.data?.error || refreshErr.message);
+            await handleLogout(false);
+          }
+        } else {
+          await handleLogout(false);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    bootstrapUser();
+  }, []);
+
   const register = async (username, email, password) => {
     setLoading(true);
     setAuthError(null);
     try {
-      // ✅ FIX: Normalize email before sending
       const normalizedEmail = email.toLowerCase().trim();
-      const res = await api.post('/auth/register', { username, email: normalizedEmail, password });
+      const res = await api.post('/auth/register', { username: username.trim(), email: normalizedEmail, password });
       if (res.data.success) {
-        const { token: jwtToken, user: profile } = res.data;
-        // Registration defaults to persistent login unless specified
-        localStorage.setItem('bt_token', jwtToken);
-        localStorage.setItem('bt_user', JSON.stringify(profile));
-        setToken(jwtToken);
-        setUser(profile);
-        return true;
+        return { success: true, message: res.data.message };
       }
     } catch (err) {
-      const message = err.response?.data?.error || 'Registration failed. Please try again.';
+      const message = err.response?.data?.error || 'Unable to create account right now. Please try again.';
       setAuthError(message);
-      return false;
+      return { success: false, message };
     } finally {
       setLoading(false);
     }
   };
 
-  // Login User
   const login = async (email, password, rememberMe = false) => {
     setLoading(true);
     setAuthError(null);
     try {
-      // ✅ FIX: Normalize email before sending — prevents case mismatch failures
       const normalizedEmail = email.toLowerCase().trim();
-      console.log('[Auth] Attempting login for:', normalizedEmail);
       const res = await api.post('/auth/login', { email: normalizedEmail, password });
       if (res.data.success) {
-        const { token: jwtToken, user: profile } = res.data;
-        
-        if (rememberMe) {
-          localStorage.setItem('bt_token', jwtToken);
-          localStorage.setItem('bt_user', JSON.stringify(profile));
-        } else {
-          sessionStorage.setItem('bt_token', jwtToken);
-          sessionStorage.setItem('bt_user', JSON.stringify(profile));
-        }
-        
-        setToken(jwtToken);
-        setUser(profile);
-        console.log('[Auth] Login successful for:', normalizedEmail);
+        persistSession(res.data, rememberMe);
         return true;
       }
     } catch (err) {
-      // ✅ FIX: Show the exact error message from the server (not a generic one)
       const message = err.response?.data?.error || 'Login failed. Please check your email and password.';
-      console.error('[Auth] Login failed:', message);
       setAuthError(message);
       return false;
     } finally {
@@ -107,32 +138,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout User
-  const logout = () => {
-    handleLogout();
-  };
+  const logout = () => handleLogout(true);
 
-  // Update Settings (Theme, Currency, Language)
   const updateSettings = async (settingsData) => {
     try {
       const res = await api.put('/auth/settings', settingsData);
       if (res.data.success) {
         const updated = res.data.user;
-        if (localStorage.getItem('bt_token')) {
-          localStorage.setItem('bt_user', JSON.stringify(updated));
-        } else if (sessionStorage.getItem('bt_token')) {
-          sessionStorage.setItem('bt_user', JSON.stringify(updated));
-        }
+        const storage = getStorageForSession();
+        storage.setItem('bt_user', JSON.stringify(updated));
         setUser(updated);
         return true;
       }
     } catch (err) {
-      console.error('[Settings] Update failed:', err.message);
+      console.error('[Settings] Update failed:', err.response?.data?.error || err.message);
       return false;
     }
   };
 
-  // Forgot Password Trigger
   const forgotPassword = async (email) => {
     setAuthError(null);
     try {
@@ -146,11 +169,23 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Reset Password Action
-  const resetPassword = async (code, password) => {
+  const verifyEmail = async (email, token) => {
     setAuthError(null);
     try {
-      const res = await api.put(`/auth/resetpassword/${code}`, { password });
+      const normalizedEmail = email.toLowerCase().trim();
+      const res = await api.post('/auth/verify', { email: normalizedEmail, token });
+      return res.data;
+    } catch (err) {
+      const message = err.response?.data?.error || 'Email verification failed.';
+      setAuthError(message);
+      throw err;
+    }
+  };
+
+  const resetPassword = async (resetToken, password) => {
+    setAuthError(null);
+    try {
+      const res = await api.put(`/auth/resetpassword/${resetToken}`, { password });
       return res.data;
     } catch (err) {
       const message = err.response?.data?.error || 'Password reset update failed.';
@@ -171,7 +206,8 @@ export const AuthProvider = ({ children }) => {
       updateSettings,
       forgotPassword,
       resetPassword,
-      clearError: () => setAuthError(null)
+      verifyEmail,
+      clearError: () => setAuthError(null),
     }}>
       {children}
     </AuthContext.Provider>

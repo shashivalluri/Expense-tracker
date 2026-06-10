@@ -1,44 +1,54 @@
 const jwt = require('jsonwebtoken');
-const mongoose = require('mongoose');
 const User = require('../models/User');
-const mockStorage = require('../utils/mockStorage');
 
 const protect = async (req, res, next) => {
   let token;
+
+  if (!process.env.MONGODB_URI) {
+    console.error('[Config] MONGODB_URI is missing. Protected API routes cannot access MongoDB Atlas.');
+    return res.status(503).json({
+      success: false,
+      error: 'Database connection is not configured yet. Please add the MONGODB_URI in Vercel and redeploy.',
+    });
+  }
 
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith('Bearer')
   ) {
     try {
-      // Extract token
       token = req.headers.authorization.split(' ')[1];
 
-      // Decode token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_jwt_key_that_is_long_and_random');
+      const decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET || 'super_secret_jwt_key_that_is_long_and_random'
+      );
 
-      // Attach user to request, checking database availability
-      const dbConnected = mongoose.connection.readyState === 1;
-
-      if (dbConnected) {
-        req.user = await User.findById(decoded.id).select('-password');
-      } else {
-        req.user = mockStorage.users.findById(decoded.id);
+      if (decoded.type && decoded.type !== 'access') {
+        return res.status(401).json({ success: false, error: 'Your session is invalid. Please log in again.' });
       }
 
+      req.user = await User.findById(decoded.id).select(
+        'id username email settings is_verified'
+      );
+
       if (!req.user) {
-        return res.status(401).json({ success: false, error: 'Not authorized, user not found' });
+        return res.status(401).json({ success: false, error: 'Your session is invalid. Please log in again.' });
+      }
+
+      if (!req.user.is_verified) {
+        return res.status(403).json({ success: false, error: 'Please verify your email address before continuing.' });
       }
 
       next();
     } catch (error) {
-      console.error('Auth check error:', error.message);
-      return res.status(401).json({ success: false, error: 'Not authorized, token failed' });
+      console.warn('[Auth] Session check failed:', error.message);
+      return res.status(401).json({ success: false, error: 'Your session expired. Please log in again.' });
     }
   }
 
   if (!token) {
-    return res.status(401).json({ success: false, error: 'Not authorized, no token provided' });
+    return res.status(401).json({ success: false, error: 'Please log in to continue.' });
   }
 };
 

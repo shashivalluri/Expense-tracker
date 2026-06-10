@@ -1,66 +1,78 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 
-const UserSchema = new mongoose.Schema(
+const userSchema = new mongoose.Schema(
   {
     username: {
       type: String,
-      required: [true, 'Please add a username'],
+      required: [true, 'Username is required'],
       trim: true,
     },
     email: {
       type: String,
-      required: [true, 'Please add an email'],
+      required: [true, 'Email is required'],
       unique: true,
-      match: [
-        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-        'Please add a valid email',
-      ],
-      trim: true,
       lowercase: true,
+      trim: true,
     },
-    password: {
+    password_hash: {
       type: String,
-      required: [true, 'Please add a password'],
-      minlength: [6, 'Password must be at least 6 characters'],
-      select: false, // Prevents password from leaking in standard user queries
+      required: [true, 'Password hash is required'],
     },
     settings: {
-      currency: {
-        type: String,
-        default: 'INR',
-      },
-      theme: {
-        type: String,
-        enum: ['light', 'dark'],
-        default: 'dark',
-      },
-      language: {
-        type: String,
-        default: 'en',
-      },
+      type: mongoose.Schema.Types.Mixed,
+      default: { currency: 'USD', theme: 'dark', language: 'en' },
     },
-    resetPasswordToken: String,
-    resetPasswordExpire: Date,
+    is_verified: {
+      type: Boolean,
+      default: false,
+    },
+    verification_token: {
+      type: String,
+      default: null,
+    },
+    verification_expiry: {
+      type: Date,
+      default: null,
+    },
+    reset_token: {
+      type: String,
+      default: null,
+    },
+    reset_token_expiry: {
+      type: Date,
+      default: null,
+    },
+    refresh_token_hash: {
+      type: String,
+      default: null,
+    },
+    refresh_token_expiry: {
+      type: Date,
+      default: null,
+    },
   },
   {
-    timestamps: true,
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
   }
 );
 
-// Hash password before saving to DB
-UserSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) {
-    return next();
-  }
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
-  next();
+// Virtual — expose `id` as a string (mirrors Prisma's uuid string id)
+userSchema.virtual('id').get(function () {
+  return this._id.toHexString();
 });
 
-// Compare entered password with hashed password
-UserSchema.methods.matchPassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
-};
+userSchema.set('toJSON', {
+  virtuals: true,
+  transform(_doc, ret) {
+    ret.id = ret._id.toHexString();
+    delete ret._id;
+    delete ret.__v;
+    delete ret.password_hash;
+    delete ret.verification_token;
+    delete ret.reset_token;
+    delete ret.refresh_token_hash;
+    return ret;
+  },
+});
 
-module.exports = mongoose.model('User', UserSchema);
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);

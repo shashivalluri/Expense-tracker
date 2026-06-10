@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 
-const TransactionSchema = new mongoose.Schema(
+const transactionSchema = new mongoose.Schema(
   {
-    userId: {
+    user_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
@@ -10,17 +10,15 @@ const TransactionSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: ['income', 'expense'],
-      required: [true, 'Please specify transaction type (income or expense)'],
+      required: true,
     },
     amount: {
       type: Number,
-      required: [true, 'Please add an amount'],
-      min: [0.01, 'Amount must be greater than zero'],
+      required: true,
     },
     category: {
       type: String,
-      required: [true, 'Please select a category'],
-      trim: true,
+      required: true,
     },
     date: {
       type: Date,
@@ -28,34 +26,47 @@ const TransactionSchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      required: [true, 'Please add a brief description'],
-      trim: true,
+      default: '',
     },
     note: {
       type: String,
-      trim: true,
       default: '',
     },
-    isRecurring: {
+    is_recurring: {
       type: Boolean,
       default: false,
     },
-    recurrenceInterval: {
+    recurrence_interval: {
       type: String,
-      enum: ['none', 'weekly', 'monthly', 'yearly'],
+      enum: ['none', 'daily', 'weekly', 'monthly', 'yearly'],
       default: 'none',
     },
-    nextOccurrenceDate: {
+    next_occurrence: {
       type: Date,
-    },
-    originalRecurringId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Transaction',
+      default: null,
     },
   },
   {
-    timestamps: true,
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
   }
 );
 
-module.exports = mongoose.model('Transaction', TransactionSchema);
+transactionSchema.index({ user_id: 1, date: -1 });
+
+transactionSchema.virtual('id').get(function () {
+  return this._id.toHexString();
+});
+
+transactionSchema.set('toJSON', {
+  virtuals: true,
+  transform(_doc, ret) {
+    ret.id = ret._id.toHexString();
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+module.exports =
+  mongoose.models.Transaction ||
+  mongoose.model('Transaction', transactionSchema);

@@ -31,9 +31,18 @@ const Login = () => {
     clearError();
     setLocalError(null);
     
-    // Check if redirect has expired URL param
     if (location.search.includes('expired=true')) {
       setLocalError('Your security session expired. Please log in again.');
+    }
+    if (location.search.includes('verified=true')) {
+      setFlowSuccessMessage('Email verified successfully. You can now log in.');
+    }
+    const params = new URLSearchParams(location.search);
+    const resetToken = params.get('reset');
+    if (resetToken) {
+      setResetCode(resetToken);
+      setFlowMode('reset');
+      setFlowSuccessMessage('Enter a new password to finish your reset.');
     }
   }, [location.search]);
 
@@ -76,8 +85,7 @@ const Login = () => {
     try {
       const res = await forgotPassword(recoveryEmail);
       setLoading(false);
-      setFlowSuccessMessage(`Code found! Enter verification code "${res.resetCode}" to set a new password.`);
-      setResetCode(res.resetCode); // Pre-fill for developer convenience!
+      setFlowSuccessMessage(res.message || 'If an account exists, a password reset link has been sent.');
       setFlowMode('reset');
     } catch (err) {
       setLoading(false);
@@ -137,7 +145,7 @@ const Login = () => {
           {/* Logo & Headline */}
           <div className="text-center mb-8">
             <h2 className="text-3xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100">
-              Tracker
+              Budget Tracker Pro
             </h2>
             <p className="text-sm font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
               Track Smarter. Save Better.
@@ -265,7 +273,7 @@ const Login = () => {
           {flowMode === 'forgot' && (
             <form onSubmit={handleForgotSubmit} className="space-y-5">
               <p className="text-xs text-slate-500 dark:text-slate-400 text-center font-medium leading-relaxed mb-4">
-                Enter your email address below. We'll generate a verification reset code that will display instantly on screen for easy verification!
+                Enter your email address below and we'll send a secure reset link if the account exists.
               </p>
 
               <div className="space-y-1.5">
@@ -291,7 +299,7 @@ const Login = () => {
                 disabled={loading}
                 className="glass-btn-primary w-full py-3.5"
               >
-                {loading ? 'Retrieving Code...' : 'Request Recovery Code'}
+                {loading ? 'Sending Link...' : 'Send Reset Link'}
                 <ArrowRight size={18} />
               </button>
 
@@ -309,7 +317,7 @@ const Login = () => {
           {flowMode === 'reset' && (
             <form onSubmit={handleResetSubmit} className="space-y-5">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Verification Reset Code</label>
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Reset Token</label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500">
                     <Key size={18} />
@@ -319,7 +327,7 @@ const Login = () => {
                     value={resetCode}
                     onChange={(e) => setResetCode(e.target.value)}
                     className="glass-input pl-11 tracking-widest text-center font-bold"
-                    placeholder="XXXXXX"
+                    placeholder="Paste reset token"
                     disabled={loading}
                     required
                   />
@@ -374,7 +382,7 @@ const Login = () => {
           {flowMode === 'login' && (
             <div className="text-center mt-8 pt-4 border-t border-slate-200 dark:border-slate-800">
               <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                New to Tracker?{' '}
+                New to Budget Tracker Pro?{' '}
               </span>
               <Link
                 to="/register"

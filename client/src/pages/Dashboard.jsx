@@ -254,7 +254,7 @@ const Dashboard = () => {
               <Sparkles size={20} className="text-white" />
             </div>
             <div className="flex-1">
-              <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100">Welcome to BUDGET TRACKER! 🎉 Here's how to get started:</h3>
+              <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100">Welcome to Budget Tracker Pro. Here's how to get started:</h3>
               <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2">
                 {[
                   '① Click "Quick Add" to record your first income or expense',

@@ -1,56 +1,79 @@
 import axios from 'axios';
 
-// Define unified Axios instance pointing to the Express server
-// In production (Vercel), VITE_API_URL is not set so it falls back to '/api'
-// In development, set VITE_API_URL=http://localhost:5000/api in client/.env
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000 // 15 second timeout
+  timeout: 15000,
 });
 
-// Request Interceptor: Inject JWT token into headers for every request
+const getAccessToken = () => {
+  return localStorage.getItem('bt_access_token') ||
+    sessionStorage.getItem('bt_access_token') ||
+    localStorage.getItem('bt_token') ||
+    sessionStorage.getItem('bt_token');
+};
+
+const getRefreshToken = () => {
+  return localStorage.getItem('bt_refresh_token') || sessionStorage.getItem('bt_refresh_token');
+};
+
+const clearAuthStorage = () => {
+  ['bt_token', 'bt_access_token', 'bt_refresh_token', 'bt_user', 'aura_token', 'aura_user'].forEach((key) => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  });
+};
+
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('bt_token') || sessionStorage.getItem('bt_token');
+    const token = getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    // Debug log: uncomment to trace API calls
-    // console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`, config.data || '');
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response Interceptor: Only redirect on 401 for PROTECTED routes, NOT for auth routes
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // ✅ FIX: Skip redirect for auth routes (login, register, forgotpassword, resetpassword)
-    // Without this fix, a failed login (wrong password → 401) would cause a redirect loop
+  async (error) => {
     const requestUrl = error.config?.url || '';
-    const isAuthRoute = requestUrl.includes('/auth/login') ||
-                        requestUrl.includes('/auth/register') ||
-                        requestUrl.includes('/auth/forgotpassword') ||
-                        requestUrl.includes('/auth/resetpassword');
+    const isAuthRoute = [
+      '/auth/login',
+      '/auth/register',
+      '/auth/forgotpassword',
+      '/auth/resetpassword',
+      '/auth/refresh',
+      '/auth/verify',
+    ].some((route) => requestUrl.includes(route));
 
-    if (error.response && error.response.status === 401 && !isAuthRoute) {
-      // Only clean storage and redirect if a PROTECTED route returns 401 (token expired/invalid)
-      const token = localStorage.getItem('bt_token') || sessionStorage.getItem('bt_token');
-      if (token) {
-        console.warn('[API] Session expired — redirecting to login');
-        localStorage.removeItem('bt_token');
-        localStorage.removeItem('bt_user');
-        sessionStorage.removeItem('bt_token');
-        sessionStorage.removeItem('bt_user');
-        window.location.href = '/login?expired=true';
+    if (error.response?.status === 401 && !isAuthRoute && !error.config?._retry) {
+      const refreshToken = getRefreshToken();
+      if (refreshToken) {
+        try {
+          error.config._retry = true;
+          const refreshRes = await api.post('/auth/refresh', { refreshToken });
+          const storage = localStorage.getItem('bt_refresh_token') ? localStorage : sessionStorage;
+          const accessToken = refreshRes.data.accessToken || refreshRes.data.token;
+
+          storage.setItem('bt_access_token', accessToken);
+          storage.setItem('bt_refresh_token', refreshRes.data.refreshToken);
+          storage.setItem('bt_user', JSON.stringify(refreshRes.data.user));
+
+          error.config.headers.Authorization = `Bearer ${accessToken}`;
+          return api(error.config);
+        } catch (refreshError) {
+          console.warn('[API] Session refresh failed');
+        }
       }
+
+      clearAuthStorage();
+      window.location.href = '/login?expired=true';
     }
+
     return Promise.reject(error);
   }
 );

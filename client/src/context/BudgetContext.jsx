@@ -3,6 +3,42 @@ import api from '../utils/api';
 
 const BudgetContext = createContext();
 
+const normalizeTransaction = (tx) => ({
+  ...tx,
+  _id: tx.id,
+  isRecurring: tx.is_recurring,
+  recurrenceInterval: tx.recurrence_interval,
+  nextOccurrence: tx.next_occurrence,
+  createdAt: tx.created_at,
+  updatedAt: tx.updated_at,
+});
+
+const normalizeGoal = (goal) => ({
+  ...goal,
+  _id: goal.id,
+  targetAmount: goal.target_amount,
+  currentAmount: goal.current_amount,
+  deadlineDate: goal.deadline_date,
+  createdAt: goal.created_at,
+  updatedAt: goal.updated_at,
+});
+
+const normalizeBudget = (budget) => budget ? ({
+  ...budget,
+  _id: budget.id,
+  totalLimit: budget.total_limit,
+  categoryLimits: budget.category_limits || {},
+  createdAt: budget.created_at,
+  updatedAt: budget.updated_at,
+}) : null;
+
+const normalizeActivity = (activity) => ({
+  ...activity,
+  _id: activity.id,
+  actionType: activity.action_type,
+  ipAddress: activity.ip_address,
+});
+
 export const BudgetProvider = ({ children }) => {
   const [transactions, setTransactions] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 0, totalItems: 0 });
@@ -67,7 +103,7 @@ export const BudgetProvider = ({ children }) => {
 
       const res = await api.get(`/transactions?${params.toString()}`);
       if (res.data.success) {
-        setTransactions(res.data.data);
+        setTransactions(res.data.data.map(normalizeTransaction));
         setPagination(res.data.pagination);
       }
     } catch (err) {
@@ -85,7 +121,7 @@ export const BudgetProvider = ({ children }) => {
         // Refresh local views
         fetchStats();
         fetchAlerts();
-        return res.data.data;
+        return normalizeTransaction(res.data.data);
       }
     } catch (err) {
       addNotification(err.response?.data?.error || 'Failed to add transaction', 'danger');
@@ -100,7 +136,7 @@ export const BudgetProvider = ({ children }) => {
         addNotification(`Updated transaction: ${txData.description}`, 'success');
         fetchStats();
         fetchAlerts();
-        return res.data.data;
+        return normalizeTransaction(res.data.data);
       }
     } catch (err) {
       addNotification(err.response?.data?.error || 'Failed to update transaction', 'danger');
@@ -129,7 +165,7 @@ export const BudgetProvider = ({ children }) => {
     try {
       const res = await api.get(`/budgets/${month}`);
       if (res.data.success) {
-        setActiveBudget(res.data.data);
+        setActiveBudget(normalizeBudget(res.data.data));
       }
     } catch (err) {
       console.error('Fetch budget failed:', err.message);
@@ -142,10 +178,10 @@ export const BudgetProvider = ({ children }) => {
     try {
       const res = await api.put(`/budgets/${month}`, budgetData);
       if (res.data.success) {
-        setActiveBudget(res.data.data);
+        setActiveBudget(normalizeBudget(res.data.data));
         addNotification('Monthly budget rules updated successfully!', 'success');
         fetchAlerts();
-        return res.data.data;
+        return normalizeBudget(res.data.data);
       }
     } catch (err) {
       addNotification('Failed to save budget settings', 'danger');
@@ -170,7 +206,7 @@ export const BudgetProvider = ({ children }) => {
     try {
       const res = await api.get('/goals');
       if (res.data.success) {
-        setGoals(res.data.data);
+        setGoals(res.data.data.map(normalizeGoal));
       }
     } catch (err) {
       console.error('Fetch goals failed:', err.message);
@@ -185,7 +221,7 @@ export const BudgetProvider = ({ children }) => {
       if (res.data.success) {
         addNotification(`New Goal: "${goalData.name}" created successfully!`, 'success');
         fetchGoals();
-        return res.data.data;
+        return normalizeGoal(res.data.data);
       }
     } catch (err) {
       addNotification(err.response?.data?.error || 'Failed to create goal', 'danger');
@@ -231,7 +267,7 @@ export const BudgetProvider = ({ children }) => {
     try {
       const res = await api.get('/activities');
       if (res.data.success) {
-        setActivities(res.data.data);
+        setActivities(res.data.data.map(normalizeActivity));
       }
     } catch (err) {
       console.error('Fetch activities failed:', err.message);

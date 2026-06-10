@@ -1,7 +1,7 @@
 {
   "name": "glassmorphic-expense-tracker-workspace",
   "version": "1.0.0",
-  "description": "Full-stack Glassmorphic Bento Grid Expense Tracker workspace",
+  "description": "Full-stack Budget Tracker Pro workspace",
   "main": "api/index.js",
   "scripts": {
     "install-all": "npm install && cd backend && npm install && cd ../client && npm install",
@@ -9,8 +9,8 @@
     "dev:backend": "cd backend && npm run dev",
     "dev:client": "cd client && npm run dev",
     "seed": "cd backend && npm run seed",
-    "build": "cd client && npm install && npm run build",
-    "vercel-build": "cd client && npm install && npm run build"
+    "build": "cd backend && npm install && cd ../client && npm install && npm run build",
+    "vercel-build": "cd backend && npm install && cd ../client && npm install && npm run build"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -19,7 +19,8 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.4.1",
+    "mongoose": "^8.4.0",
     "morgan": "^1.10.0"
-  }
+  },
+  "devDependencies": {}
 }

@@ -99,11 +99,13 @@ const Transactions = () => {
         limit: 1000 // Grab up to 1000 items
       });
       const response = await fetch(`/api/transactions?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('aura_token')}` }
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('bt_access_token') || sessionStorage.getItem('bt_access_token') || localStorage.getItem('bt_token') || sessionStorage.getItem('bt_token')}`
+        }
       });
       const resData = await response.json();
       if (resData.success) {
-        exportToExcel(resData.data, 'aura_ledger_report.xlsx');
+        exportToExcel(resData.data, 'budget_tracker_pro_ledger_report.xlsx');
       }
     } catch (err) {
       console.error('Failed to export:', err.message);

@@ -1,33 +1,47 @@
 const mongoose = require('mongoose');
 
-const BudgetSchema = new mongoose.Schema(
+const budgetSchema = new mongoose.Schema(
   {
-    userId: {
+    user_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
     },
     month: {
-      type: String, // Stored as "YYYY-MM" format (e.g. "2026-06")
+      type: String, // "YYYY-MM"
       required: true,
     },
-    totalLimit: {
+    total_limit: {
       type: Number,
-      required: [true, 'Please add a total budget limit'],
-      min: [0, 'Limit cannot be negative'],
+      required: true,
+      default: 2000,
     },
-    categoryLimits: {
-      type: Map,
-      of: Number,
-      default: {}, // Maps categories like 'Food' to their limit numbers
+    category_limits: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
   },
   {
-    timestamps: true,
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
   }
 );
 
-// Compound index so a user can only have one budget schema per month
-BudgetSchema.index({ userId: 1, month: 1 }, { unique: true });
+// Unique compound index — one budget per user per month
+budgetSchema.index({ user_id: 1, month: 1 }, { unique: true });
 
-module.exports = mongoose.model('Budget', BudgetSchema);
+budgetSchema.virtual('id').get(function () {
+  return this._id.toHexString();
+});
+
+budgetSchema.set('toJSON', {
+  virtuals: true,
+  transform(_doc, ret) {
+    ret.id = ret._id.toHexString();
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+module.exports =
+  mongoose.models.Budget || mongoose.model('Budget', budgetSchema);

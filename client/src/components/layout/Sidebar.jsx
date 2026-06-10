@@ -26,11 +26,11 @@ const Sidebar = ({ isOpen, toggleMobileSidebar }) => {
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: <LayoutGrid size={20} /> },
-    { name: 'Transactions', path: '/transactions', icon: <ArrowRightLeft size={20} /> },
+    { name: 'Expense Categories', path: '/transactions', icon: <ArrowRightLeft size={20} /> },
     { name: 'Analytics', path: '/analytics', icon: <PieChart size={20} /> },
-    { name: 'Budgets', path: '/budgets', icon: <Scale size={20} /> },
-    { name: 'Goals', path: '/goals', icon: <Target size={20} /> },
-    { name: 'Audit Logs', path: '/logs', icon: <History size={20} /> },
+    { name: 'Monthly Reports', path: '/budgets', icon: <Scale size={20} /> },
+    { name: 'Budget Goals', path: '/goals', icon: <Target size={20} /> },
+    { name: 'Savings Insights', path: '/logs', icon: <History size={20} /> },
     { name: 'Settings', path: '/settings', icon: <Settings size={20} /> },
   ];
 
@@ -39,14 +39,14 @@ const Sidebar = ({ isOpen, toggleMobileSidebar }) => {
       {/* 1. Header Branding Logo */}
       <div className="flex items-center gap-3 px-3 mb-8">
         <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-neon bg-black">
-          <img src={logoUrl} alt="Tracker Logo" className="w-full h-full object-cover" />
+          <img src={logoUrl} alt="Budget Tracker Pro Logo" className="w-full h-full object-cover" />
         </div>
         <div>
-          <span className="text-2xl font-extrabold bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-teal bg-clip-text text-transparent tracking-wide truncate pr-2">
-            Tracker
+          <span className="text-xl font-extrabold bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-teal bg-clip-text text-transparent tracking-wide truncate pr-2">
+            Budget Tracker Pro
           </span>
           <span className="block text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest -mt-1">
-            Finance Suite
+            Tracker Suite
           </span>
         </div>
       </div>

@@ -1,18 +1,17 @@
-const mongoose = require('mongoose');
 const Goal = require('../models/Goal');
 const Transaction = require('../models/Transaction');
 const ActivityLog = require('../models/ActivityLog');
-const mockStorage = require('../utils/mockStorage');
 
 const logActivity = async (userId, actionType, description, req) => {
-  const ipAddress = req ? (req.ip || req.connection.remoteAddress || '127.0.0.1') : '127.0.0.1';
-  const dbConnected = mongoose.connection.readyState === 1;
+  const ipAddress = req ? (req.ip || req.connection?.remoteAddress || '127.0.0.1') : '127.0.0.1';
   try {
-    if (dbConnected) {
-      await ActivityLog.create({ userId, actionType, description, ipAddress });
-    } else {
-      mockStorage.activitylogs.create({ userId, actionType, description, ipAddress });
-    }
+    await ActivityLog.create({
+      user_id: userId,
+      action_type: actionType,
+      description,
+      ip_address: ipAddress,
+      timestamp: new Date(),
+    });
   } catch (err) {
     console.error('Failed to write activity log:', err.message);
   }
@@ -23,17 +22,7 @@ const logActivity = async (userId, actionType, description, req) => {
 // @access  Private
 exports.getGoals = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const dbConnected = mongoose.connection.readyState === 1;
-    let goals = [];
-
-    if (dbConnected) {
-      goals = await Goal.find({ userId }).sort({ createdAt: -1 });
-    } else {
-      goals = mockStorage.goals.find({ userId });
-      goals.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
-
+    const goals = await Goal.find({ user_id: req.user._id }).sort({ created_at: -1 });
     res.status(200).json({ success: true, data: goals });
   } catch (error) {
     next(error);
@@ -51,29 +40,24 @@ exports.createGoal = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Please provide name, target amount and a deadline' });
     }
 
-    const goalData = {
-      userId: req.user.id,
+    const goal = await Goal.create({
+      user_id: req.user._id,
       name,
-      targetAmount: parseFloat(targetAmount),
-      currentAmount: 0,
-      deadlineDate: new Date(deadlineDate),
+      target_amount: parseFloat(targetAmount),
+      current_amount: 0,
+      deadline_date: new Date(deadlineDate),
       category: category || 'General',
-      notes: notes || ''
-    };
+      notes: notes || '',
+    });
 
-    const dbConnected = mongoose.connection.readyState === 1;
-    let goal;
-
-    if (dbConnected) {
-      goal = await Goal.create(goalData);
-    } else {
-      goal = mockStorage.goals.create(goalData);
-    }
-
-    await logActivity(req.user.id, 'CREATE_GOAL', `Created financial goal "${name}" with target $${parseFloat(targetAmount).toFixed(2)}`, req);
+    await logActivity(
+      req.user._id,
+      'CREATE_GOAL',
+      `Created financial goal "${name}" with target $${parseFloat(targetAmount).toFixed(2)}`,
+      req
+    );
 
     res.status(201).json({ success: true, data: goal });
-
   } catch (error) {
     next(error);
   }
@@ -85,39 +69,30 @@ exports.createGoal = async (req, res, next) => {
 exports.updateGoal = async (req, res, next) => {
   try {
     const { name, targetAmount, currentAmount, deadlineDate, category, notes } = req.body;
-    const dbConnected = mongoose.connection.readyState === 1;
-    let goal;
 
-    if (dbConnected) {
-      goal = await Goal.findOne({ _id: req.params.id, userId: req.user.id });
-    } else {
-      goal = mockStorage.goals.findById(req.params.id);
-    }
-
-    if (!goal) {
+    const existingGoal = await Goal.findOne({ _id: req.params.id, user_id: req.user._id });
+    if (!existingGoal) {
       return res.status(404).json({ success: false, error: 'Goal not found' });
     }
 
-    const updateData = {
-      name: name || goal.name,
-      targetAmount: targetAmount !== undefined ? parseFloat(targetAmount) : goal.targetAmount,
-      currentAmount: currentAmount !== undefined ? parseFloat(currentAmount) : goal.currentAmount,
-      deadlineDate: deadlineDate ? new Date(deadlineDate) : goal.deadlineDate,
-      category: category || goal.category,
-      notes: notes !== undefined ? notes : goal.notes
-    };
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (targetAmount !== undefined) updateData.target_amount = parseFloat(targetAmount);
+    if (currentAmount !== undefined) updateData.current_amount = parseFloat(currentAmount);
+    if (deadlineDate !== undefined) updateData.deadline_date = new Date(deadlineDate);
+    if (category !== undefined) updateData.category = category;
+    if (notes !== undefined) updateData.notes = notes;
 
-    let updatedGoal;
-    if (dbConnected) {
-      updatedGoal = await Goal.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
-    } else {
-      updatedGoal = mockStorage.goals.findByIdAndUpdate(req.params.id, updateData);
-    }
+    const updatedGoal = await Goal.findByIdAndUpdate(req.params.id, updateData, { new: true });
 
-    await logActivity(req.user.id, 'UPDATE_GOAL', `Updated details for savings goal "${updatedGoal.name}"`, req);
+    await logActivity(
+      req.user._id,
+      'UPDATE_GOAL',
+      `Updated details for savings goal "${updatedGoal.name}"`,
+      req
+    );
 
     res.status(200).json({ success: true, data: updatedGoal });
-
   } catch (error) {
     next(error);
   }
@@ -128,29 +103,16 @@ exports.updateGoal = async (req, res, next) => {
 // @access  Private
 exports.deleteGoal = async (req, res, next) => {
   try {
-    const dbConnected = mongoose.connection.readyState === 1;
-    let goal;
-
-    if (dbConnected) {
-      goal = await Goal.findOne({ _id: req.params.id, userId: req.user.id });
-    } else {
-      goal = mockStorage.goals.findById(req.params.id);
-    }
-
+    const goal = await Goal.findOne({ _id: req.params.id, user_id: req.user._id });
     if (!goal) {
       return res.status(404).json({ success: false, error: 'Goal not found' });
     }
 
-    if (dbConnected) {
-      await Goal.findByIdAndDelete(req.params.id);
-    } else {
-      mockStorage.goals.findByIdAndDelete(req.params.id);
-    }
+    await Goal.findByIdAndDelete(req.params.id);
 
-    await logActivity(req.user.id, 'DELETE_GOAL', `Removed financial goal "${goal.name}"`, req);
+    await logActivity(req.user._id, 'DELETE_GOAL', `Removed financial goal "${goal.name}"`, req);
 
     res.status(200).json({ success: true, message: 'Goal deleted successfully' });
-
   } catch (error) {
     next(error);
   }
@@ -162,78 +124,53 @@ exports.deleteGoal = async (req, res, next) => {
 exports.contributeToGoal = async (req, res, next) => {
   try {
     const { amount } = req.body;
-    const userId = req.user.id;
+    const userId = req.user._id;
 
     if (!amount || parseFloat(amount) <= 0) {
       return res.status(400).json({ success: false, error: 'Please provide a valid contribution amount greater than zero' });
     }
 
     const contribution = parseFloat(amount);
-    const dbConnected = mongoose.connection.readyState === 1;
-    let goal;
 
-    if (dbConnected) {
-      goal = await Goal.findOne({ _id: req.params.id, userId });
-    } else {
-      goal = mockStorage.goals.findById(req.params.id);
-    }
-
+    const goal = await Goal.findOne({ _id: req.params.id, user_id: userId });
     if (!goal) {
       return res.status(404).json({ success: false, error: 'Goal not found' });
     }
 
-    // 1. Calculate new savings balance
-    const newSavingsAmount = parseFloat(goal.currentAmount || 0) + contribution;
-    const completed = newSavingsAmount >= goal.targetAmount;
+    const newSavingsAmount = parseFloat(goal.current_amount || 0) + contribution;
+    const completed = newSavingsAmount >= goal.target_amount;
 
-    let updatedGoal;
-    if (dbConnected) {
-      updatedGoal = await Goal.findByIdAndUpdate(
-        req.params.id,
-        { currentAmount: newSavingsAmount },
-        { new: true }
-      );
-    } else {
-      updatedGoal = mockStorage.goals.findByIdAndUpdate(req.params.id, {
-        currentAmount: newSavingsAmount
-      });
-    }
+    const updatedGoal = await Goal.findByIdAndUpdate(
+      req.params.id,
+      { current_amount: newSavingsAmount },
+      { new: true }
+    );
 
-    // 2. Automatically log an 'expense' representing money moved into dedicated savings
-    // In category 'Savings' which is a standard financial category
-    const transactionData = {
-      userId,
+    await Transaction.create({
+      user_id: userId,
       type: 'expense',
       amount: contribution,
       category: 'Savings',
       date: new Date(),
       description: `Savings Contribution: ${goal.name}`,
-      note: `Added funds to financial goal: ${goal.name}. Previous savings: $${goal.currentAmount.toFixed(2)}. New savings: $${newSavingsAmount.toFixed(2)}.`
-    };
+      note: `Added funds to financial goal: ${goal.name}. Previous savings: $${goal.current_amount.toFixed(2)}. New savings: $${newSavingsAmount.toFixed(2)}.`,
+    });
 
-    if (dbConnected) {
-      await Transaction.create(transactionData);
-    } else {
-      mockStorage.transactions.create(transactionData);
-    }
-
-    // 3. Log user activity
     await logActivity(
       userId,
       'GOAL_CONTRIBUTION',
-      `Contributed $${contribution.toFixed(2)} to savings plan "${goal.name}". Progress: $${newSavingsAmount.toFixed(2)} / $${goal.targetAmount.toFixed(2)}`,
+      `Contributed $${contribution.toFixed(2)} to savings plan "${goal.name}". Progress: $${newSavingsAmount.toFixed(2)} / $${goal.target_amount.toFixed(2)}`,
       req
     );
 
     res.status(200).json({
       success: true,
       data: updatedGoal,
-      completed, // Boolean passed back to user to trigger confetti animation!
-      message: completed 
+      completed,
+      message: completed
         ? `CONGRATULATIONS! You have fully achieved your "${goal.name}" financial target!`
-        : `Successfully contributed $${contribution.toFixed(2)} to "${goal.name}"!`
+        : `Successfully contributed $${contribution.toFixed(2)} to "${goal.name}"!`,
     });
-
   } catch (error) {
     next(error);
   }

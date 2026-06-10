@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
-import { User, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Wallet } from 'lucide-react';
+import { User, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Wallet, Key, CheckCircle2 } from 'lucide-react';
 import GlassCard from '../components/common/GlassCard';
 
 const Register = () => {
-  const { register, authError, clearError } = useAuth();
+  const { register, verifyEmail, authError, clearError } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
+
+  // Flow Modes: 'register' | 'verify'
+  const [flowMode, setFlowMode] = useState('register');
 
   // Form states
   const [username, setUsername] = useState('');
@@ -16,6 +20,10 @@ const Register = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
+  // Verify states
+  const [verificationCode, setVerificationCode] = useState('');
+  const [flowSuccessMessage, setFlowSuccessMessage] = useState('');
+
   // Custom alerts state
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState(null);
@@ -24,7 +32,18 @@ const Register = () => {
   useEffect(() => {
     clearError();
     setLocalError(null);
-  }, []);
+    const params = new URLSearchParams(location.search);
+    const queryEmail = params.get('email');
+    const verifyToken = params.get('verify');
+    if (queryEmail) {
+      setEmail(queryEmail);
+    }
+    if (verifyToken) {
+      setVerificationCode(verifyToken);
+      setFlowMode('verify');
+      setFlowSuccessMessage('Verification link loaded. Confirm to activate your account.');
+    }
+  }, [location.search]);
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
@@ -46,11 +65,33 @@ const Register = () => {
     }
 
     setLoading(true);
-    const success = await register(username, email, password);
+    const result = await register(username, email, password);
     setLoading(false);
 
-    if (success) {
-      navigate('/');
+    if (result && result.success) {
+      setFlowSuccessMessage(result.message);
+      setFlowMode('verify');
+    }
+  };
+
+  const handleVerifySubmit = async (e) => {
+    e.preventDefault();
+    setLocalError(null);
+    clearError();
+
+    if (!verificationCode) {
+      setLocalError('Please enter the verification token.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await verifyEmail(email, verificationCode);
+      setLoading(false);
+      navigate('/login?verified=true');
+    } catch (err) {
+      setLoading(false);
+      setLocalError(err.response?.data?.error || 'Verification failed. Please check the code and try again.');
     }
   };
 
@@ -77,10 +118,10 @@ const Register = () => {
           {/* Header */}
           <div className="text-center mb-6">
             <h2 className="text-3xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100">
-              Create Account
+              {flowMode === 'register' ? 'Create Account' : 'Verify Email'}
             </h2>
             <p className="text-sm font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
-              Begin your AURA journey
+              {flowMode === 'register' ? 'Begin your financial journey' : 'Confirm your account'}
             </p>
           </div>
 
@@ -92,114 +133,161 @@ const Register = () => {
             </div>
           )}
 
-          <form onSubmit={handleRegisterSubmit} className="space-y-4">
-            
-            {/* Input: Username */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Preferred Username</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500">
-                  <User size={18} />
-                </span>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="glass-input pl-11"
-                  placeholder="e.g. Alex"
-                  disabled={loading}
-                  required
-                />
-              </div>
+          {flowSuccessMessage && flowMode === 'verify' && (
+            <div className="p-3.5 mb-5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2">
+              <CheckCircle2 size={16} className="flex-shrink-0" />
+              <span>{flowSuccessMessage}</span>
             </div>
+          )}
 
-            {/* Input: Email */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Email Address</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500">
-                  <Mail size={18} />
-                </span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="glass-input pl-11"
-                  placeholder="name@example.com"
-                  disabled={loading}
-                  required
-                />
+          {flowMode === 'register' ? (
+            <form onSubmit={handleRegisterSubmit} className="space-y-4">
+              {/* Input: Username */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Preferred Username</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500">
+                    <User size={18} />
+                  </span>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="glass-input pl-11"
+                    placeholder="e.g. Alex"
+                    disabled={loading}
+                    required
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Input: Password */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Password</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500">
-                  <Lock size={18} />
-                </span>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="glass-input pl-11 pr-11"
-                  placeholder="At least 6 characters"
-                  disabled={loading}
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
+              {/* Input: Email */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Email Address</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500">
+                    <Mail size={18} />
+                  </span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="glass-input pl-11"
+                    placeholder="name@example.com"
+                    disabled={loading}
+                    required
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Input: Confirm Password */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Confirm Password</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500">
-                  <Lock size={18} />
-                </span>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="glass-input pl-11"
-                  placeholder="Re-enter password"
-                  disabled={loading}
-                  required
-                />
+              {/* Input: Password */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Password</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500">
+                    <Lock size={18} />
+                  </span>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="glass-input pl-11 pr-11"
+                    placeholder="At least 6 characters"
+                    disabled={loading}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="glass-btn-primary w-full py-3.5 mt-2"
-            >
-              {loading ? 'Creating Profile...' : 'Complete Registration'}
-              <ArrowRight size={18} />
-            </button>
-          </form>
+              {/* Input: Confirm Password */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Confirm Password</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500">
+                    <Lock size={18} />
+                  </span>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="glass-input pl-11"
+                    placeholder="Re-enter password"
+                    disabled={loading}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="glass-btn-primary w-full py-3.5 mt-2"
+              >
+                {loading ? 'Creating Profile...' : 'Complete Registration'}
+                <ArrowRight size={18} />
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifySubmit} className="space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-1">Verification Token</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500">
+                    <Key size={18} />
+                  </span>
+                  <input
+                    type="text"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value)}
+                    className="glass-input pl-11 tracking-widest text-center font-bold"
+                    placeholder="Paste verification token"
+                    disabled={loading}
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="glass-btn-primary w-full py-3.5"
+              >
+                {loading ? 'Verifying...' : 'Verify Email'}
+                <ArrowRight size={18} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setFlowMode('register'); setLocalError(null); }}
+                className="w-full text-center text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 mt-2 block"
+              >
+                Cancel and Go Back
+              </button>
+            </form>
+          )}
 
           {/* Footer Navigation link */}
-          <div className="text-center mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              Already have an account?{' '}
-            </span>
-            <Link
-              to="/login"
-              className="text-xs font-bold text-brand-indigo dark:text-brand-violet hover:underline outline-none"
-            >
-              Sign in here
-            </Link>
-          </div>
+          {flowMode === 'register' && (
+            <div className="text-center mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                Already have an account?{' '}
+              </span>
+              <Link
+                to="/login"
+                className="text-xs font-bold text-brand-indigo dark:text-brand-violet hover:underline outline-none"
+              >
+                Sign in here
+              </Link>
+            </div>
+          )}
 
         </GlassCard>
       </motion.div>

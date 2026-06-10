@@ -1,45 +1,57 @@
 const mongoose = require('mongoose');
 
-const GoalSchema = new mongoose.Schema(
+const goalSchema = new mongoose.Schema(
   {
-    userId: {
+    user_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
     },
     name: {
       type: String,
-      required: [true, 'Please add a goal name'],
+      required: true,
       trim: true,
     },
-    targetAmount: {
+    target_amount: {
       type: Number,
-      required: [true, 'Please add a target amount'],
-      min: [0.01, 'Target amount must be greater than zero'],
+      required: true,
     },
-    currentAmount: {
+    current_amount: {
       type: Number,
       default: 0,
-      min: [0, 'Current savings cannot be negative'],
     },
-    deadlineDate: {
+    deadline_date: {
       type: Date,
-      required: [true, 'Please add a deadline date'],
+      default: null,
     },
     category: {
       type: String,
       default: 'General',
-      trim: true,
     },
     notes: {
       type: String,
-      trim: true,
       default: '',
     },
   },
   {
-    timestamps: true,
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
   }
 );
 
-module.exports = mongoose.model('Goal', GoalSchema);
+goalSchema.index({ user_id: 1, created_at: -1 });
+
+goalSchema.virtual('id').get(function () {
+  return this._id.toHexString();
+});
+
+goalSchema.set('toJSON', {
+  virtuals: true,
+  transform(_doc, ret) {
+    ret.id = ret._id.toHexString();
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+module.exports = mongoose.models.Goal || mongoose.model('Goal', goalSchema);

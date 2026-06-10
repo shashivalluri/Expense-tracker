@@ -1,18 +1,17 @@
-const mongoose = require('mongoose');
 const Budget = require('../models/Budget');
 const Transaction = require('../models/Transaction');
 const ActivityLog = require('../models/ActivityLog');
-const mockStorage = require('../utils/mockStorage');
 
 const logActivity = async (userId, actionType, description, req) => {
-  const ipAddress = req ? (req.ip || req.connection.remoteAddress || '127.0.0.1') : '127.0.0.1';
-  const dbConnected = mongoose.connection.readyState === 1;
+  const ipAddress = req ? (req.ip || req.connection?.remoteAddress || '127.0.0.1') : '127.0.0.1';
   try {
-    if (dbConnected) {
-      await ActivityLog.create({ userId, actionType, description, ipAddress });
-    } else {
-      mockStorage.activitylogs.create({ userId, actionType, description, ipAddress });
-    }
+    await ActivityLog.create({
+      user_id: userId,
+      action_type: actionType,
+      description,
+      ip_address: ipAddress,
+      timestamp: new Date(),
+    });
   } catch (err) {
     console.error('Failed to write activity log:', err.message);
   }
@@ -23,55 +22,29 @@ const logActivity = async (userId, actionType, description, req) => {
 // @access  Private
 exports.getBudget = async (req, res, next) => {
   try {
-    const { month } = req.params; // e.g. "2026-06"
-    const userId = req.user.id;
-    const dbConnected = mongoose.connection.readyState === 1;
+    const { month } = req.params;
+    const userId = req.user._id;
 
-    let budget;
+    let budget = await Budget.findOne({ user_id: userId, month });
 
-    if (dbConnected) {
-      budget = await Budget.findOne({ userId, month });
-      
-      // If no budget exists for this month, instantiate a new default one based on general defaults
-      if (!budget) {
-        budget = await Budget.create({
-          userId,
-          month,
-          totalLimit: 2000,
-          categoryLimits: {
-            Food: 500,
-            Utilities: 300,
-            Entertainment: 200,
-            Transportation: 200,
-            Shopping: 400,
-            Others: 400
-          }
-        });
-        await logActivity(userId, 'CREATE_BUDGET', `Auto-initialized budget limit of $2000 for month ${month}`);
-      }
-    } else {
-      budget = mockStorage.budgets.findOne({ userId, month });
-      
-      if (!budget) {
-        budget = mockStorage.budgets.create({
-          userId,
-          month,
-          totalLimit: 2000,
-          categoryLimits: {
-            Food: 500,
-            Utilities: 300,
-            Entertainment: 200,
-            Transportation: 200,
-            Shopping: 400,
-            Others: 400
-          }
-        });
-        logActivity(userId, 'CREATE_BUDGET', `Auto-initialized budget limit of $2000 for month ${month}`);
-      }
+    if (!budget) {
+      budget = await Budget.create({
+        user_id: userId,
+        month,
+        total_limit: 2000,
+        category_limits: {
+          Food: 500,
+          Utilities: 300,
+          Entertainment: 200,
+          Transportation: 200,
+          Shopping: 400,
+          Others: 400,
+        },
+      });
+      await logActivity(userId, 'CREATE_BUDGET', `Auto-initialized budget limit of $2000 for month ${month}`);
     }
 
     res.status(200).json({ success: true, data: budget });
-
   } catch (error) {
     next(error);
   }
@@ -84,49 +57,36 @@ exports.updateBudget = async (req, res, next) => {
   try {
     const { month } = req.params;
     const { totalLimit, categoryLimits } = req.body;
-    const userId = req.user.id;
-    const dbConnected = mongoose.connection.readyState === 1;
+    const userId = req.user._id;
 
-    let budget;
-
-    if (dbConnected) {
-      budget = await Budget.findOne({ userId, month });
-    } else {
-      budget = mockStorage.budgets.findOne({ userId, month });
-    }
+    let budget = await Budget.findOne({ user_id: userId, month });
 
     if (!budget) {
-      // Create one if it didn't exist somehow
-      const createData = {
-        userId,
+      budget = await Budget.create({
+        user_id: userId,
         month,
-        totalLimit: totalLimit !== undefined ? parseFloat(totalLimit) : 2000,
-        categoryLimits: categoryLimits || {}
-      };
-
-      if (dbConnected) {
-        budget = await Budget.create(createData);
-      } else {
-        budget = mockStorage.budgets.create(createData);
-      }
+        total_limit: totalLimit !== undefined ? parseFloat(totalLimit) : 2000,
+        category_limits: categoryLimits || {},
+      });
     } else {
-      // Update existing
-      const updateData = {
-        totalLimit: totalLimit !== undefined ? parseFloat(totalLimit) : budget.totalLimit,
-        categoryLimits: categoryLimits || (dbConnected ? budget.categoryLimits : budget.categoryLimits || {})
-      };
-
-      if (dbConnected) {
-        budget = await Budget.findByIdAndUpdate(budget._id, updateData, { new: true, runValidators: true });
-      } else {
-        budget = mockStorage.budgets.findByIdAndUpdate(budget._id, updateData);
-      }
+      budget = await Budget.findByIdAndUpdate(
+        budget._id,
+        {
+          total_limit: totalLimit !== undefined ? parseFloat(totalLimit) : budget.total_limit,
+          category_limits: categoryLimits || budget.category_limits,
+        },
+        { new: true }
+      );
     }
 
-    await logActivity(userId, 'UPDATE_BUDGET', `Updated monthly budget limit to $${budget.totalLimit.toFixed(2)} for ${month}`, req);
+    await logActivity(
+      userId,
+      'UPDATE_BUDGET',
+      `Updated monthly budget limit to $${budget.total_limit.toFixed(2)} for ${month}`,
+      req
+    );
 
     res.status(200).json({ success: true, data: budget });
-
   } catch (error) {
     next(error);
   }
@@ -137,44 +97,28 @@ exports.updateBudget = async (req, res, next) => {
 // @access  Private
 exports.getBudgetAlerts = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const currentMonth = new Date().toISOString().substring(0, 7); // "YYYY-MM"
-    const dbConnected = mongoose.connection.readyState === 1;
+    const userId = req.user._id;
+    const currentMonth = new Date().toISOString().substring(0, 7);
 
-    // 1. Fetch current month's budget details
-    let budget;
-    if (dbConnected) {
-      budget = await Budget.findOne({ userId, month: currentMonth });
-    } else {
-      budget = mockStorage.budgets.findOne({ userId, month: currentMonth });
-    }
+    const budget = await Budget.findOne({ user_id: userId, month: currentMonth });
 
     if (!budget) {
       return res.status(200).json({ success: true, alerts: [], totalSpent: 0, budgetLimit: 0 });
     }
 
-    // 2. Fetch all transactions for this month
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
 
-    let thisMonthTransactions = [];
+    const thisMonthTransactions = await Transaction.find({
+      user_id: userId,
+      type: 'expense',
+      date: { $gte: startOfMonth, $lte: endOfMonth },
+    });
 
-    if (dbConnected) {
-      thisMonthTransactions = await Transaction.find({
-        userId,
-        type: 'expense',
-        date: { $gte: startOfMonth, $lte: endOfMonth }
-      });
-    } else {
-      thisMonthTransactions = mockStorage.transactions.find({ userId })
-        .filter(t => t.type === 'expense' && new Date(t.date) >= startOfMonth && new Date(t.date) <= endOfMonth);
-    }
-
-    // 3. Summarize spends per category and in total
     let totalSpent = 0;
     const categorySpends = {};
 
-    thisMonthTransactions.forEach(t => {
+    thisMonthTransactions.forEach((t) => {
       const amt = parseFloat(t.amount);
       totalSpent += amt;
       categorySpends[t.category] = (categorySpends[t.category] || 0) + amt;
@@ -182,29 +126,26 @@ exports.getBudgetAlerts = async (req, res, next) => {
 
     const alerts = [];
 
-    // Check overall total limit overspending
-    const totalPercentage = budget.totalLimit > 0 ? (totalSpent / budget.totalLimit) * 100 : 0;
+    const totalPercentage = budget.total_limit > 0 ? (totalSpent / budget.total_limit) * 100 : 0;
     if (totalPercentage >= 80) {
       alerts.push({
         category: 'All Categories',
-        limit: budget.totalLimit,
+        limit: budget.total_limit,
         spent: totalSpent,
         percentage: Math.round(totalPercentage),
         alertType: totalPercentage >= 100 ? 'danger' : 'warning',
-        message: totalPercentage >= 100 
-          ? `CRITICAL: You have exceeded your total monthly budget of $${budget.totalLimit}!`
-          : `WARNING: You have spent ${Math.round(totalPercentage)}% of your total monthly budget of $${budget.totalLimit}!`
+        message:
+          totalPercentage >= 100
+            ? `CRITICAL: You have exceeded your total monthly budget of $${budget.total_limit}!`
+            : `WARNING: You have spent ${Math.round(totalPercentage)}% of your total monthly budget of $${budget.total_limit}!`,
       });
     }
 
-    // Check category limits
-    // Mongoose maps must be accessed via .get() or .entries() in Mongo, in mock JSON they are raw objects
-    const catLimits = dbConnected ? Object.fromEntries(budget.categoryLimits || new Map()) : budget.categoryLimits || {};
-
-    Object.keys(catLimits).forEach(category => {
+    const catLimits = budget.category_limits || {};
+    Object.keys(catLimits).forEach((category) => {
       const limit = parseFloat(catLimits[category]);
       const spent = categorySpends[category] || 0;
-      
+
       if (limit > 0) {
         const percentage = (spent / limit) * 100;
         if (percentage >= 80) {
@@ -214,9 +155,10 @@ exports.getBudgetAlerts = async (req, res, next) => {
             spent,
             percentage: Math.round(percentage),
             alertType: percentage >= 100 ? 'danger' : 'warning',
-            message: percentage >= 100
-              ? `CRITICAL: You have exceeded your "${category}" budget limit ($${limit} spent: $${spent.toFixed(2)})!`
-              : `WARNING: You have consumed ${Math.round(percentage)}% of your "${category}" budget limit ($${limit} spent: $${spent.toFixed(2)})!`
+            message:
+              percentage >= 100
+                ? `CRITICAL: You have exceeded your "${category}" budget limit ($${limit} spent: $${spent.toFixed(2)})!`
+                : `WARNING: You have consumed ${Math.round(percentage)}% of your "${category}" budget limit ($${limit} spent: $${spent.toFixed(2)})!`,
           });
         }
       }
@@ -226,10 +168,9 @@ exports.getBudgetAlerts = async (req, res, next) => {
       success: true,
       alerts,
       totalSpent: Math.round(totalSpent * 100) / 100,
-      budgetLimit: budget.totalLimit,
-      categorySpends
+      budgetLimit: budget.total_limit,
+      categorySpends,
     });
-
   } catch (error) {
     next(error);
   }
