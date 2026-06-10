@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd backend && npm install && cd ../client && npm install && npm run build",
+  "buildCommand": "cd backend && npm install --include=dev && cd ../client && npm install --include=dev && npm run build",
   "outputDirectory": "client/dist",
   "functions": {
     "api/index.js": {
