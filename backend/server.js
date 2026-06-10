@@ -9,14 +9,19 @@ const seedData = require('./utils/seedData');
 // Load environment variables
 dotenv.config();
 
-// Connect to MongoDB Atlas
-connectDB().catch((err) => {
-  console.error('[Server] Failed to connect to MongoDB:', err.message);
-  process.exit(1);
-});
-
 // Initialize express app
 const app = express();
+
+// Global MongoDB connection middleware
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('[Server] Failed to connect to MongoDB:', err.message);
+    res.status(503).json({ success: false, error: 'Database connection failed. Check your MONGODB_URI.' });
+  }
+});
 
 // Middleware
 app.use(express.json());

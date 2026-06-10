@@ -37,9 +37,15 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-// Connect to MongoDB Atlas (cached — safe to call on every cold start)
-connectDB().catch((err) => {
-  console.error('[Vercel] MongoDB connection error:', err.message);
+// Ensure MongoDB Atlas is connected before any route handler runs
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('[Vercel] MongoDB connection error:', err.message);
+    res.status(503).json({ success: false, error: 'Database connection failed. Check your MONGODB_URI.' });
+  }
 });
 
 // Mount all API routes (strip /api prefix — Vercel's rewrite passes the full path)
